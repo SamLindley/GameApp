@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Gamez</string>
+    <string name="chess">Chess</string>
+    <string name="tic_tac_toe">Tic Tac Toe</string>
+    <string name="chess_button">Chess</string>
+    <string name="tic_tac_toe_button">Tic Tac Toe</string>
+</resources>
