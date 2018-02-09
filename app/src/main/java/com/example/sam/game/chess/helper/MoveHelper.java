@@ -149,7 +149,7 @@ public class MoveHelper {
             if (withinBounds(c) && !destination.isOccupied()) {
                 list.add(c);
             }
-            if (withinBounds(c) && destination.isOccupied() && checkFriendly(selectedPiece, destination)) {
+            if (withinBounds(c) && destination.isOccupied() && checkUnfriendly(selectedPiece, destination)) {
                 list.add(c);
             }
         }
@@ -168,7 +168,7 @@ public class MoveHelper {
             if (withinBounds(c) && !destination.isOccupied()) {
                 list.add(c);
             }
-            if (withinBounds(c) && destination.isOccupied() && checkFriendly(selectedPiece, destination)) {
+            if (withinBounds(c) && destination.isOccupied() && checkUnfriendly(selectedPiece, destination)) {
                 list.add(c);
             }
         }
@@ -192,7 +192,7 @@ public class MoveHelper {
 
         for (Coordinates c :
                 getTheoreticalPawnAttacks(position, selectedPiece.getColor())) {
-            if (withinBounds(c) && boardState.get(c).isOccupied() && checkFriendly(selectedPiece, boardState.get(c))) {
+            if (withinBounds(c) && boardState.get(c).isOccupied() && checkUnfriendly(selectedPiece, boardState.get(c))) {
                 list.add(c);
             }
         }
@@ -259,7 +259,7 @@ public class MoveHelper {
 
     private boolean findMoves(PieceTracker selectedPiece, HashMap<Coordinates, PieceTracker> boardState, ArrayList<Coordinates> list, Coordinates c) {
         if (withinBounds(c) && boardState.get(c).isOccupied()) {
-            if (checkFriendly(selectedPiece, boardState.get(c))) {
+            if (checkUnfriendly(selectedPiece, boardState.get(c))) {
                 list.add(c);
             }
             return true;
@@ -291,7 +291,7 @@ public class MoveHelper {
         return coordinates.getY() > 0 && coordinates.getY() < 9 && coordinates.getX() > 0 && coordinates.getX() < 9;
     }
 
-    private boolean checkFriendly(PieceTracker piece, PieceTracker threatenedPiece) {
+    private boolean checkUnfriendly(PieceTracker piece, PieceTracker threatenedPiece) {
         return piece.getColour() != threatenedPiece.getColor();
     }
 }

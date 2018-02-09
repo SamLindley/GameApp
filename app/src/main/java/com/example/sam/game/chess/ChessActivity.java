@@ -7,15 +7,13 @@ import android.support.v7.app.AppCompatActivity;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.View;
-import android.widget.GridLayout;
-import android.widget.ImageView;
-import android.widget.TextView;
-import android.widget.Toast;
+import android.widget.*;
 import com.example.sam.game.R;
 import com.example.sam.game.chess.helper.MoveHelper;
 import com.example.sam.game.chess.model.Coordinates;
 import com.example.sam.game.chess.model.PieceTracker;
 
+import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.HashMap;
 
@@ -32,6 +30,7 @@ public class ChessActivity extends AppCompatActivity {
 
     private final int GAME_STATE_MOVING = 0;
     private final int GAME_STATE_SELECTING = 1;
+    private final int GAME_STATE_OVER = 2;
 
 
     private final static int WHITE = 0;
@@ -46,16 +45,21 @@ public class ChessActivity extends AppCompatActivity {
     private ArrayList<PieceTracker> takenPieces = new ArrayList<>();
     private PieceTracker selectedPiece;
     private ArrayList<PieceTracker> editedSquares;
-    private ArrayList<Coordinates> attackMarkers;
     private ArrayList<Coordinates> legalMoves;
     private TextView turnTracker;
     private boolean kingInCheck = false;
     private int gameState = GAME_STATE_SELECTING;
+    private int tempType;
+    private int tempColour;
+    private boolean tempOccupied;
+    private Button newGameButton;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.chess);
+        newGameButton = findViewById(R.id.new_game);
         setUpGame();
     }
 
@@ -185,32 +189,22 @@ public class ChessActivity extends AppCompatActivity {
                 piecePositions.get(moves).setEligibleForMove(false);
             }
         }
-
-        // nor are the attack markers
-        if (attackMarkers != null) {
-            for (Coordinates moves :
-                    attackMarkers) {
-                piecePositions.get(moves).setEligibleForMove(false);
-            }
-        }
     }
 
     private void showPossibleMoves() {
 
-        attackMarkers = new ArrayList<>();
         legalMoves = new ArrayList<>();
         legalMoves.addAll(getPossibleMoves(selectedPiece));
 
         for (Coordinates c :
                 legalMoves) {
-
             if (isOccupied(c)) {
                 // if it is occupied that means this is an attacking move
                 PieceTracker attackedPiece = piecePositions.get(c);
                 attackedPiece.setEligibleForMove(true);
                 attackedPiece.getImageView().setBackgroundColor(0xFFFF0000);
                 editedSquares.add(piecePositions.get(c));
-            }else {
+            } else {
                 editedSquares.add(piecePositions.get(c));
                 piecePositions.get(c).getImageView().setImageResource(0);
                 piecePositions.get(c).getImageView().setBackgroundColor(0xFF00FF00);
@@ -223,59 +217,152 @@ public class ChessActivity extends AppCompatActivity {
         return piecePositions.get(coordinates).isOccupied();
     }
 
+    private void movePieceBehindTheScenes(PieceTracker startingLocation, PieceTracker endLocation) {
 
+
+        tempColour = (endLocation.getColour());
+        tempType = (endLocation.getType());
+        tempOccupied = (endLocation.isOccupied());
+
+
+        endLocation.setOccupied(true);
+        endLocation.setType(startingLocation.getType());
+        endLocation.setColour(startingLocation.getColour());
+
+        startingLocation.setOccupied(false);
+        startingLocation.setEligibleForMove(false);
+        startingLocation.setType(EMPTY);
+        startingLocation.setColour(EMPTY);
+    }
+
+    private void undoMovePieceBehindTheScenes(Coordinates startingLocation, Coordinates endLocation) {
+
+        PieceTracker end = piecePositions.get(endLocation);
+        PieceTracker start = piecePositions.get(startingLocation);
+
+        start.setOccupied(true);
+        start.setEligibleForMove(false);
+        start.setType(end.getType());
+        start.setColour(end.getColour());
+
+        end.setOccupied(tempOccupied);
+        end.setType(tempType);
+        end.setColour(tempColour);
+    }
+
+    private void movePieceGraphically(Coordinates startingLocation, Coordinates endLocation) {
+
+    }
 
     private void movePiece(Coordinates startingLocation, Coordinates endLocation) {
-        if (kingInCheck) {
-            if (!checkIfMoveWillEndCheck(endLocation)) {
-                Toast.makeText(this.getApplicationContext(), "Illegal Move", Toast.LENGTH_SHORT).show();
-                return;
-            }
+        if (checkIfMoveWillSelfCheck(piecePositions.get(startingLocation), piecePositions.get(endLocation))) {
+            Toast.makeText(getApplicationContext(), "ILLEGAL MOVE", Toast.LENGTH_SHORT).show();
+
+            return;
         }
 
         kingInCheck = false;
 
         PieceTracker oldPiece = piecePositions.get(startingLocation);
+
         checkIfKingMoved(oldPiece);
         resetDepartureSquare(oldPiece);
         resetBackgroundColours();
 
         PieceTracker newPiece = piecePositions.get(endLocation);
         updatePiece(newPiece, oldPiece);
-
-        piecesCausingCheck = new ArrayList<>();
-
-        if (checkForCheck(newPiece)) {
-            Toast.makeText(this.getApplicationContext(), "Check", Toast.LENGTH_SHORT).show();
-            piecesCausingCheck.add(newPiece);
-            kingInCheck = true;
-        }
+        oldPiece.setOccupied(false);
+        oldPiece.setEligibleForMove(false);
+        oldPiece.setType(EMPTY);
+        oldPiece.setColour(EMPTY);
+        newPiece.setEligibleForMove(false);
 
         for (Coordinates move :
                 legalMoves) {
             piecePositions.get(move).setEligibleForMove(false);
         }
 
-        oldPiece.setOccupied(false);
-        oldPiece.setEligibleForMove(false);
-        newPiece.setEligibleForMove(false);
-        gameState = GAME_STATE_SELECTING;
-        changeTurn();
+        if (checkForCheck()) {
+
+            if (checkForCheckmate()) {
+
+                Toast.makeText(getApplicationContext(), "CHECKMATEEEEEE", Toast.LENGTH_SHORT).show();
+
+                turnTracker.setText("Game Over");
+                gameState = GAME_STATE_OVER;
+                newGameButton.setVisibility(View.VISIBLE);
+            } else {
+                Toast.makeText(this.getApplicationContext(), "Check", Toast.LENGTH_SHORT).show();
+                kingInCheck = true;
+                gameState = GAME_STATE_SELECTING;
+                changeTurn();
+            }
+
+        } else {
+            gameState = GAME_STATE_SELECTING;
+            changeTurn();
+        }
+
 
     }
 
-    private boolean checkIfMoveWillEndCheck(Coordinates location) {
-        piecePositions.get(location).setOccupied(true);
-        for (PieceTracker piece :
-                piecesCausingCheck) {
-            Log.i(TAG, "checkIfMoveWillEndCheck: " + piece.getPosition().printCoords());
-            if (checkForCheck(piece)) {
-                piecePositions.get(location).setOccupied(false);
-                return false;
+    private boolean checkForCheckmate() {
+
+
+        for (PieceTracker pieceTracker : piecePositions.values()) {
+            // find all pieces of checked colour
+            if (pieceTracker.getColor() != turn) {
+                // get all moves of said piece
+                ArrayList<Coordinates> moves = getPossibleMoves(pieceTracker);
+                for (Coordinates move : moves) {
+                    // perform the move
+                    movePieceBehindTheScenes(pieceTracker, piecePositions.get(move));
+                    boolean moveWillSaveCheck = true;
+
+                    // loop through new board state
+                    for (PieceTracker newBoardState : piecePositions.values()) {
+                        // find all attacking colours
+                        if (newBoardState.isOccupied() && newBoardState.getColor() == turn) {
+                            // get possible moves for each piece
+                            ArrayList<Coordinates> theoreticalMoves = getPossibleMoves(newBoardState);
+                            // check with each piece if it threatens the enemy king
+                            for (Coordinates theoreticalMove : theoreticalMoves) {
+                                if (piecePositions.get(theoreticalMove).getType() == KING) {
+                                    moveWillSaveCheck = false;
+                                }
+                            }
+                        }
+                    }
+                    undoMovePieceBehindTheScenes(pieceTracker.getPosition(), (move));
+                    if (moveWillSaveCheck) {
+                        return false;
+                    }
+                }
+
             }
         }
-        piecePositions.get(location).setOccupied(false);
         return true;
+    }
+
+    private boolean checkIfMoveWillSelfCheck(PieceTracker start, PieceTracker end) {
+        boolean isCheck = false;
+
+        movePieceBehindTheScenes(start, end);
+
+        for (PieceTracker piece :
+                piecePositions.values()) {
+            if (piece.isOccupied() && piece.getColor() != turn) {
+                ArrayList<Coordinates> moves = getPossibleMoves(piece);
+                for (Coordinates move : moves) {
+                    if (piecePositions.get(move).getType() == KING) {
+                        isCheck = true;
+                    }
+                }
+            }
+
+        }
+        undoMovePieceBehindTheScenes(start.getPosition(), end.getPosition());
+        return isCheck;
     }
 
     private void checkIfKingMoved(PieceTracker piece) {
@@ -303,7 +390,7 @@ public class ChessActivity extends AppCompatActivity {
         MoveHelper moveHelper = new MoveHelper();
         ArrayList<Coordinates> temp = new ArrayList<>();
 
-        switch (selectedPiece.getType()) {
+        switch (piece.getType()) {
             case PAWN:
                 temp = moveHelper.getMovesAndAttacksForPawn(piece, piecePositions);
                 break;
@@ -327,21 +414,25 @@ public class ChessActivity extends AppCompatActivity {
         return temp;
     }
 
-    private boolean checkForCheck(PieceTracker piece) {
+    private boolean checkForCheck() {
 
-        attackMarkers = new ArrayList<>();
+        boolean isCheck = false;
 
-        getPossibleMoves(piece);
-
-        for (Coordinates attackPoint :
-                attackMarkers) {
-            if (piecePositions.get(attackPoint).isOccupied() && (piecePositions.get(attackPoint).getColor() != piece.getColor())) {
-                if (piecePositions.get(attackPoint).getType() == KING) {
-                    return true;
+        for (PieceTracker piece :
+                piecePositions.values()) {
+            if (piece.isOccupied() && piece.getColor() == turn) {
+                ArrayList<Coordinates> moves = getPossibleMoves(piece);
+                for (Coordinates move : moves) {
+                    if (piecePositions.get(move).getType() == KING) {
+                        piecesCausingCheck.add(piece);
+                        isCheck = true;
+                    }
                 }
             }
+
         }
-        return false;
+        return isCheck;
+
     }
 
     private void changeTurn() {
@@ -395,5 +486,10 @@ public class ChessActivity extends AppCompatActivity {
 
             }
         }
+    }
+
+    public void startNewGame(View view) {
+        finish();
+        startActivity(getIntent());
     }
 }
