@@ -9,10 +9,11 @@ import android.util.Log;
 import android.view.View;
 import android.widget.GridLayout;
 import android.widget.ImageView;
+import android.widget.TextView;
+import android.widget.Toast;
 import com.example.sam.game.R;
 import com.example.sam.game.chess.helper.MoveHelper;
 import com.example.sam.game.chess.model.Coordinates;
-import com.example.sam.game.chess.model.GameSquare;
 import com.example.sam.game.chess.model.PieceTracker;
 
 import java.util.ArrayList;
@@ -20,65 +21,42 @@ import java.util.HashMap;
 
 public class ChessActivity extends AppCompatActivity {
 
+    private final int EMPTY = -1;
     private final int PAWN = 0;
     private final int KNIGHT = 1;
     private final int BISHOP = 2;
     private final int ROOK = 3;
     private final int QUEEN = 4;
     private final int KING = 5;
-    private final int EMPTY = -1;
+
+
+    private final int GAME_STATE_MOVING = 0;
+    private final int GAME_STATE_SELECTING = 1;
 
 
     private final static int WHITE = 0;
     private final static int BLACK = 1;
     private int turn = WHITE;
-    private GridLayout board;
-    private GridLayout piecesLayout;
+
+    String TAG = "tag";
+    private Coordinates blackKingPosition;
+    private Coordinates whiteKingPosition;
+    private ArrayList<PieceTracker> piecesCausingCheck = new ArrayList<>();
     private HashMap<Coordinates, PieceTracker> piecePositions;
+    private ArrayList<PieceTracker> takenPieces = new ArrayList<>();
     private PieceTracker selectedPiece;
     private ArrayList<PieceTracker> editedSquares;
-    ArrayList<Coordinates> attacks;
-    ArrayList<Coordinates> legalMoves;
-
+    private ArrayList<Coordinates> attackMarkers;
+    private ArrayList<Coordinates> legalMoves;
+    private TextView turnTracker;
+    private boolean kingInCheck = false;
+    private int gameState = GAME_STATE_SELECTING;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.chess);
-        board = findViewById(R.id.chessBoard);
-        piecesLayout = findViewById(R.id.pieces);
-        piecePositions = new HashMap<>();
-        int counter = 0;
-        int squareColour = 0;
-        for (int y = 0; y < 8; y++) {
-            if (squareColour == 0) {
-                squareColour = 1;
-            } else squareColour = 0;
-            for (int x = 0; x < 8; x++) {
-                ImageView square = (ImageView) board.getChildAt(counter);
-                ImageView pieceView = (ImageView) piecesLayout.getChildAt(counter);
-                Coordinates coordinates = new Coordinates(x, y);
-
-
-                GameSquare gameSquare = new GameSquare();
-                if (counter < 16) {
-                    gameSquare.setColourOfPiece(BLACK);
-                }
-                if (counter > 56) {
-                    gameSquare.setColourOfPiece(WHITE);
-                }
-                gameSquare.setColourOfSquare(squareColour);
-                gameSquare.setImageView(square);
-                gameSquare.setCoordinates(coordinates);
-                gameSquare.setPosition(counter);
-
-                setUpPieces(counter, pieceView, coordinates, squareColour);
-                counter++;
-                if (squareColour == 0) {
-                    squareColour = 1;
-                } else squareColour = 0;
-            }
-        }
+        setUpGame();
     }
 
     @Override
@@ -86,495 +64,294 @@ public class ChessActivity extends AppCompatActivity {
         return super.onCreateView(name, context, attrs);
     }
 
+    private void setUpGame() {
+        GridLayout piecesLayout = findViewById(R.id.pieces);
+        turnTracker = findViewById(R.id.turnTracker);
+        piecePositions = new HashMap<>();
+        int counter = 1;
+        int squareColour = WHITE;
+        for (int y = 1; y < 9; y++) {
+
+            // Cancel switch if stating a new row
+
+            if (squareColour == WHITE) {
+                squareColour = BLACK;
+            } else squareColour = WHITE;
+
+
+            for (int x = 1; x < 9; x++) {
+
+                ImageView pieceView = (ImageView) piecesLayout.getChildAt(counter - 1);
+                Coordinates coordinates = new Coordinates(x, y);
+
+
+                setUpPieces(counter, pieceView, coordinates, squareColour);
+                counter++;
+                if (squareColour == WHITE) {
+                    squareColour = BLACK;
+                } else squareColour = WHITE;
+            }
+        }
+    }
+
+    private void setUpPieces(int counter, ImageView imageView, Coordinates coordinates, int squareColor) {
+        PieceTracker piece;
+
+        if (counter == 1 || counter == 8) {
+            piece = new PieceTracker(coordinates, imageView, BLACK, ROOK, true, squareColor);
+        } else if (counter == 2 || counter == 7) {
+            piece = new PieceTracker(coordinates, imageView, BLACK, KNIGHT, true, squareColor);
+        } else if (counter == 3 || counter == 6) {
+            piece = new PieceTracker(coordinates, imageView, BLACK, BISHOP, true, squareColor);
+        } else if (counter == 4) {
+            piece = new PieceTracker(coordinates, imageView, BLACK, KING, true, squareColor);
+            blackKingPosition = coordinates;
+        } else if (counter == 5) {
+            piece = new PieceTracker(coordinates, imageView, BLACK, QUEEN, true, squareColor);
+        } else if (counter > 8 && counter < 17) {
+            piece = new PieceTracker(coordinates, imageView, BLACK, PAWN, true, squareColor);
+        } else if (counter > 48 && counter < 57) {
+            piece = new PieceTracker(coordinates, imageView, WHITE, PAWN, true, squareColor);
+        } else if (counter == 57 || counter == 64) {
+            piece = new PieceTracker(coordinates, imageView, WHITE, ROOK, true, squareColor);
+        } else if (counter == 58 || counter == 63) {
+            piece = new PieceTracker(coordinates, imageView, WHITE, KNIGHT, true, squareColor);
+        } else if (counter == 59 || counter == 62) {
+            piece = new PieceTracker(coordinates, imageView, WHITE, BISHOP, true, squareColor);
+        } else if (counter == 60) {
+            piece = new PieceTracker(coordinates, imageView, WHITE, KING, true, squareColor);
+            whiteKingPosition = coordinates;
+        } else if (counter == 61) {
+            piece = new PieceTracker(coordinates, imageView, WHITE, QUEEN, true, squareColor);
+        } else piece = new PieceTracker(coordinates, imageView, EMPTY, EMPTY, false, squareColor);
+
+        piecePositions.put(coordinates, piece);
+
+        final PieceTracker finalPiece = piece;
+
+        piece.getImageView().setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (gameState == GAME_STATE_SELECTING) {
+                    if (finalPiece.getColor() == turn && finalPiece.isOccupied()) {
+                        onPieceSelected(finalPiece);
+                    }
+                } else if (gameState == GAME_STATE_MOVING) {
+                    if (finalPiece.isEligibleForMove()) {
+
+                        //means it is an enemy piece
+                        if (finalPiece.isOccupied()) {
+                            takenPieces.add(finalPiece);
+                        }
+                        movePiece(selectedPiece.getPosition(), finalPiece.getPosition());
+                    } else if (finalPiece.isOccupied() && finalPiece.getColor() == turn) {
+                        onPieceSelected(finalPiece);
+                    }
+                }
+
+            }
+        });
+
+
+    }
+
     private void onPieceSelected(PieceTracker piece) {
-        resetSquareImage();
-        resetClickListeners();
+
+        // change colours back to the original (If user had clicked another piece before this)
+        resetBackgroundColours();
+
+        // make sure all squares have move disabled (else they carry on from the old clicked pieces)
+        resetMoveOptions();
+
+        gameState = GAME_STATE_MOVING;
+
+
+        legalMoves = new ArrayList<>();
 
         editedSquares = new ArrayList<>();
 
         selectedPiece = piece;
-
-        Log.i("TEST", piece.position().printCoords());
 
         piecePositions.get(piece.position()).getImageView().setBackgroundColor(0xFFFFFF00);
         editedSquares.add(piecePositions.get(piece.position()));
         showPossibleMoves();
     }
 
-    private void resetClickListeners() {
+    private void resetMoveOptions() {
+        // old legal moves are no longer valid
         if (legalMoves != null) {
-            for (final Coordinates coordinates :
+            for (Coordinates moves :
                     legalMoves) {
-                if (piecePositions.get(coordinates).getImageView() != null) {
-                    piecePositions.get(coordinates).getImageView().setOnClickListener(new View.OnClickListener() {
-                        @Override
-                        public void onClick(View v) {
-                            if (piecePositions.get(coordinates).isOccupied()) {
-                                if (piecePositions.get(coordinates).getColor() == turn){
-                                    onPieceSelected(piecePositions.get(coordinates));
-                                }
-                            }
-                        }
-                    });
-
-
-                }
-
+                piecePositions.get(moves).setEligibleForMove(false);
             }
         }
 
+        // nor are the attack markers
+        if (attackMarkers != null) {
+            for (Coordinates moves :
+                    attackMarkers) {
+                piecePositions.get(moves).setEligibleForMove(false);
+            }
+        }
     }
 
     private void showPossibleMoves() {
 
-        attacks = new ArrayList<>();
+        attackMarkers = new ArrayList<>();
         legalMoves = new ArrayList<>();
-        ArrayList<Coordinates> temp = null;
-
-        switch (selectedPiece.getType()) {
-            case PAWN:
-                temp = getMovesForPawn(selectedPiece);
-                break;
-            case KNIGHT:
-                temp = getMovesForKnight(selectedPiece);
-                break;
-            case BISHOP:
-                temp = getMovesForBishop(selectedPiece);
-                break;
-            case ROOK:
-                temp = getMovesForRook(selectedPiece);
-                break;
-            case QUEEN:
-                temp = getMovesForQueen(selectedPiece);
-                break;
-            case KING:
-                temp = getMovesForKing(selectedPiece);
-                break;
-        }
+        legalMoves.addAll(getPossibleMoves(selectedPiece));
 
         for (Coordinates c :
-                temp) {
-            if (withinBounds(c)) {
-                legalMoves.add(c);
-            }
-        }
-
-        if (attacks != null) {
-            for (final Coordinates coordinates :
-                    attacks) {
-                PieceTracker attackedPiece = piecePositions.get(coordinates);
-                attackedPiece.getImageView().setBackgroundColor(0xFFFF0000);
-                attackedPiece.getImageView().setOnClickListener(new View.OnClickListener() {
-                    @Override
-                    public void onClick(View v) {
-                        movePiece(selectedPiece.getType(), selectedPiece.position(), piecePositions.get(coordinates).getPosition(), true);
-                    }
-                });
-                editedSquares.add(piecePositions.get(coordinates));
-            }
-        }
-        for (final Coordinates c :
                 legalMoves) {
-            if (withinBounds(c) && !isOccupied(c)) {
+
+            if (isOccupied(c)) {
+                // if it is occupied that means this is an attacking move
+                PieceTracker attackedPiece = piecePositions.get(c);
+                attackedPiece.setEligibleForMove(true);
+                attackedPiece.getImageView().setBackgroundColor(0xFFFF0000);
+                editedSquares.add(piecePositions.get(c));
+            }else {
                 editedSquares.add(piecePositions.get(c));
                 piecePositions.get(c).getImageView().setImageResource(0);
                 piecePositions.get(c).getImageView().setBackgroundColor(0xFF00FF00);
-                piecePositions.get(c).getImageView().bringToFront();
-                piecePositions.get(c).getImageView().setOnClickListener(new View.OnClickListener() {
-                    @Override
-                    public void onClick(View v) {
-                        movePiece(selectedPiece.getType(), selectedPiece.position(), piecePositions.get(c).getPosition(), false);
-                    }
-                });
+                piecePositions.get(c).setEligibleForMove(true);
             }
         }
-    }
-
-    private ArrayList<Coordinates> getMovesForKing(PieceTracker selectedPiece) {
-        MoveHelper moveHelper = new MoveHelper();
-        ArrayList<Coordinates> list = new ArrayList<>();
-        Coordinates position = selectedPiece.getPosition();
-
-        for (Coordinates c :
-                moveHelper.getKingMoves(position)) {
-            if (withinBounds(c) && !piecePositions.get(c).isOccupied()) {
-                list.add(c);
-            }
-            if (withinBounds(c) && piecePositions.get(c).isOccupied() && checkFriendly(selectedPiece, c)) {
-                attacks.add(c);
-            }
-        }
-
-
-        return list;
-    }
-
-    private ArrayList<Coordinates> getMovesForKnight(PieceTracker selectedPiece) {
-        MoveHelper moveHelper = new MoveHelper();
-        ArrayList<Coordinates> list = new ArrayList<>();
-        Coordinates position = selectedPiece.getPosition();
-
-        for (Coordinates c :
-                moveHelper.getKnightMoves(position)) {
-            if (withinBounds(c) && !piecePositions.get(c).isOccupied()) {
-                list.add(c);
-            }
-            if (withinBounds(c) && piecePositions.get(c).isOccupied() && checkFriendly(selectedPiece, c)) {
-                attacks.add(c);
-            }
-        }
-
-
-        return list;
-    }
-
-    private ArrayList<Coordinates> getMovesForPawn(PieceTracker selectedPiece) {
-        MoveHelper moveHelper = new MoveHelper();
-        ArrayList<Coordinates> list = new ArrayList<>();
-        Coordinates position = selectedPiece.getPosition();
-
-        for (Coordinates c :
-                moveHelper.getPawnMoves(position, selectedPiece.hasMoved(), selectedPiece.getColor())) {
-            if (withinBounds(c) && !piecePositions.get(c).isOccupied()) {
-                list.add(c);
-
-            } else break;
-        }
-
-        for (Coordinates c :
-                moveHelper.getPawnAttacks(position, selectedPiece.getColor())) {
-            if (withinBounds(c) && piecePositions.get(c).isOccupied() && checkFriendly(selectedPiece, c)) {
-                attacks.add(c);
-            }
-        }
-
-        Log.i("ATTASKS", "" + attacks.size());
-        return list;
-
-    }
-
-    private ArrayList<Coordinates> getMovesForQueen(PieceTracker selectedPiece) {
-        MoveHelper moveHelper = new MoveHelper();
-        ArrayList<Coordinates> list = new ArrayList<>();
-        Coordinates position = selectedPiece.getPosition();
-
-        for (Coordinates c :
-                moveHelper.getMovesEast(position)) {
-            if (withinBounds(c) && piecePositions.get(c).isOccupied()) {
-                if (checkFriendly(selectedPiece, c)) {
-                    attacks.add(c);
-                }
-                break;
-            } else if (withinBounds(c)) {
-                list.add(c);
-            }
-
-        }
-        for (Coordinates c :
-                moveHelper.getMovesWest(position)) {
-            if (withinBounds(c) && piecePositions.get(c).isOccupied()) {
-                if (checkFriendly(selectedPiece, c)) {
-                    attacks.add(c);
-                }
-                break;
-            } else if (withinBounds(c)) {
-                list.add(c);
-            }
-
-        }
-        for (Coordinates c :
-                moveHelper.getMovesSouth(position)) {
-            if (withinBounds(c) && piecePositions.get(c).isOccupied()) {
-                if (checkFriendly(selectedPiece, c)) {
-                    attacks.add(c);
-                }
-                break;
-            } else if (withinBounds(c)) {
-                list.add(c);
-            }
-
-        }
-        for (Coordinates c :
-                moveHelper.getMovesNorth(position)) {
-            if (withinBounds(c) && piecePositions.get(c).isOccupied()) {
-                if (checkFriendly(selectedPiece, c)) {
-                    attacks.add(c);
-                }
-                break;
-            } else if (withinBounds(c)) {
-                list.add(c);
-            }
-
-        }
-        for (Coordinates c :
-                moveHelper.getMovesNorthEast(position)) {
-            if (withinBounds(c) && piecePositions.get(c).isOccupied()) {
-                if (checkFriendly(selectedPiece, c)) {
-                    attacks.add(c);
-                }
-                break;
-            } else if (withinBounds(c)) {
-                list.add(c);
-            }
-
-        }
-        for (Coordinates c :
-                moveHelper.getMovesNorthWest(position)) {
-            if (withinBounds(c) && piecePositions.get(c).isOccupied()) {
-                if (checkFriendly(selectedPiece, c)) {
-                    attacks.add(c);
-                }
-                break;
-            } else if (withinBounds(c)) {
-                list.add(c);
-            }
-
-        }
-        for (Coordinates c :
-                moveHelper.getMovesSouthEast(position)) {
-            if (withinBounds(c) && piecePositions.get(c).isOccupied()) {
-                if (checkFriendly(selectedPiece, c)) {
-                    attacks.add(c);
-                }
-                break;
-            } else if (withinBounds(c)) {
-                list.add(c);
-            }
-
-        }
-        for (Coordinates c :
-                moveHelper.getMovesSouthWest(position)) {
-            if (withinBounds(c) && piecePositions.get(c).isOccupied()) {
-                if (checkFriendly(selectedPiece, c)) {
-                    attacks.add(c);
-                }
-                break;
-            } else if (withinBounds(c)) {
-                list.add(c);
-            }
-
-        }
-
-
-        return list;
-    }
-
-    private ArrayList<Coordinates> getMovesForBishop(PieceTracker selectedPiece) {
-        MoveHelper moveHelper = new MoveHelper();
-        ArrayList<Coordinates> list = new ArrayList<>();
-        Coordinates position = selectedPiece.getPosition();
-
-        for (Coordinates c :
-                moveHelper.getMovesNorthEast(position)) {
-            if (withinBounds(c) && piecePositions.get(c).isOccupied()) {
-                if (checkFriendly(selectedPiece, c)) {
-                    attacks.add(c);
-                }
-                break;
-            } else if (withinBounds(c)) {
-                list.add(c);
-            }
-
-        }
-        for (Coordinates c :
-                moveHelper.getMovesNorthWest(position)) {
-            if (withinBounds(c) && piecePositions.get(c).isOccupied()) {
-                if (checkFriendly(selectedPiece, c)) {
-                    attacks.add(c);
-                }
-                break;
-            } else if (withinBounds(c)) {
-                list.add(c);
-            }
-
-        }
-        for (Coordinates c :
-                moveHelper.getMovesSouthEast(position)) {
-            if (withinBounds(c) && piecePositions.get(c).isOccupied()) {
-                if (checkFriendly(selectedPiece, c)) {
-                    attacks.add(c);
-                }
-                break;
-            } else if (withinBounds(c)) {
-                list.add(c);
-            }
-
-        }
-        for (Coordinates c :
-                moveHelper.getMovesSouthWest(position)) {
-            if (withinBounds(c) && piecePositions.get(c).isOccupied()) {
-                if (checkFriendly(selectedPiece, c)) {
-                    attacks.add(c);
-                }
-                break;
-            } else if (withinBounds(c)) {
-                list.add(c);
-            }
-
-        }
-
-
-        return list;
-    }
-
-    private ArrayList<Coordinates> getMovesForRook(PieceTracker selectedPiece) {
-        MoveHelper moveHelper = new MoveHelper();
-        ArrayList<Coordinates> list = new ArrayList<>();
-        Coordinates position = selectedPiece.getPosition();
-
-        for (Coordinates c :
-                moveHelper.getMovesEast(position)) {
-            if (withinBounds(c) && piecePositions.get(c).isOccupied()) {
-                if (checkFriendly(selectedPiece, c)) {
-                    attacks.add(c);
-                }
-                break;
-            } else if (withinBounds(c)) {
-                list.add(c);
-            }
-
-        }
-        for (Coordinates c :
-                moveHelper.getMovesWest(position)) {
-            if (withinBounds(c) && piecePositions.get(c).isOccupied()) {
-                if (checkFriendly(selectedPiece, c)) {
-                    attacks.add(c);
-                }
-                break;
-            } else if (withinBounds(c)) {
-                list.add(c);
-            }
-
-        }
-        for (Coordinates c :
-                moveHelper.getMovesSouth(position)) {
-            if (withinBounds(c) && piecePositions.get(c).isOccupied()) {
-                if (checkFriendly(selectedPiece, c)) {
-                    attacks.add(c);
-                }
-                break;
-            } else if (withinBounds(c)) {
-                list.add(c);
-            }
-
-        }
-        for (Coordinates c :
-                moveHelper.getMovesNorth(position)) {
-            if (withinBounds(c) && piecePositions.get(c).isOccupied()) {
-                if (checkFriendly(selectedPiece, c)) {
-                    attacks.add(c);
-                }
-                break;
-            } else if (withinBounds(c)) {
-                list.add(c);
-            }
-
-        }
-        return list;
-    }
-
-    private boolean checkFriendly(PieceTracker piece, Coordinates coordinates) {
-        Log.i("CHECK FRIENDLY", "RESULTS OF INSPECTION ===== " + piece.getColour() + "  =========  " + piecePositions.get(coordinates).getColor());
-        return piece.getColour() != piecePositions.get(coordinates).getColor();
-    }
-
-    private boolean withinBounds(Coordinates coordinates) {
-        return coordinates.getY() > -1 && coordinates.getY() < 8 && coordinates.getX() > -1 && coordinates.getX() < 8;
     }
 
     private boolean isOccupied(Coordinates coordinates) {
         return piecePositions.get(coordinates).isOccupied();
     }
 
-    private void setUpPieces(int counter, ImageView imageView, Coordinates coordinates, int squareColor) {
-        PieceTracker piece = null;
 
-        if (counter == 0 || counter == 7) {
-            piece = new PieceTracker(coordinates, imageView, BLACK, ROOK, true, squareColor);
-        } else if (counter == 1 || counter == 6) {
-            piece = new PieceTracker(coordinates, imageView, BLACK, KNIGHT, true, squareColor);
-        } else if (counter == 2 || counter == 5) {
-            piece = new PieceTracker(coordinates, imageView, BLACK, BISHOP, true, squareColor);
-        } else if (counter == 3) {
-            piece = new PieceTracker(coordinates, imageView, BLACK, KING, true, squareColor);
-        } else if (counter == 4) {
-            piece = new PieceTracker(coordinates, imageView, BLACK, QUEEN, true, squareColor);
-        } else if (counter > 7 && counter < 16) {
-            piece = new PieceTracker(coordinates, imageView, BLACK, PAWN, true, squareColor);
-        } else if (counter > 47 && counter < 56) {
-            piece = new PieceTracker(coordinates, imageView, WHITE, PAWN, true, squareColor);
-        } else if (counter == 56 || counter == 63) {
-            piece = new PieceTracker(coordinates, imageView, WHITE, ROOK, true, squareColor);
-        } else if (counter == 57 || counter == 62) {
-            piece = new PieceTracker(coordinates, imageView, WHITE, KNIGHT, true, squareColor);
-        } else if (counter == 58 || counter == 61) {
-            piece = new PieceTracker(coordinates, imageView, WHITE, BISHOP, true, squareColor);
-        } else if (counter == 59) {
-            piece = new PieceTracker(coordinates, imageView, WHITE, KING, true, squareColor);
-        } else if (counter == 60) {
-            piece = new PieceTracker(coordinates, imageView, WHITE, QUEEN, true, squareColor);
+
+    private void movePiece(Coordinates startingLocation, Coordinates endLocation) {
+        if (kingInCheck) {
+            if (!checkIfMoveWillEndCheck(endLocation)) {
+                Toast.makeText(this.getApplicationContext(), "Illegal Move", Toast.LENGTH_SHORT).show();
+                return;
+            }
         }
-        if (piece != null) {
-            piecePositions.put(coordinates, piece);
-            final PieceTracker finalPiece = piece;
 
-            piece.getImageView().setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    if (finalPiece.getColor() == turn){
-                        onPieceSelected(finalPiece);
-                    }
-                }
-            });
-        } else
-            piecePositions.put(coordinates, new PieceTracker(coordinates, imageView, EMPTY, EMPTY, false, squareColor));
+        kingInCheck = false;
 
+        PieceTracker oldPiece = piecePositions.get(startingLocation);
+        checkIfKingMoved(oldPiece);
+        resetDepartureSquare(oldPiece);
+        resetBackgroundColours();
+
+        PieceTracker newPiece = piecePositions.get(endLocation);
+        updatePiece(newPiece, oldPiece);
+
+        piecesCausingCheck = new ArrayList<>();
+
+        if (checkForCheck(newPiece)) {
+            Toast.makeText(this.getApplicationContext(), "Check", Toast.LENGTH_SHORT).show();
+            piecesCausingCheck.add(newPiece);
+            kingInCheck = true;
+        }
+
+        for (Coordinates move :
+                legalMoves) {
+            piecePositions.get(move).setEligibleForMove(false);
+        }
+
+        oldPiece.setOccupied(false);
+        oldPiece.setEligibleForMove(false);
+        newPiece.setEligibleForMove(false);
+        gameState = GAME_STATE_SELECTING;
+        changeTurn();
 
     }
 
-    private void movePiece(int type, Coordinates startingLocation, Coordinates endLocation, boolean isAttack) {
-        Log.i("TAG", "MOVING PIECE");
-        for (Coordinates coordinates :
-                legalMoves) {
-            piecePositions.get(coordinates).getImageView().setOnClickListener(null);
+    private boolean checkIfMoveWillEndCheck(Coordinates location) {
+        piecePositions.get(location).setOccupied(true);
+        for (PieceTracker piece :
+                piecesCausingCheck) {
+            Log.i(TAG, "checkIfMoveWillEndCheck: " + piece.getPosition().printCoords());
+            if (checkForCheck(piece)) {
+                piecePositions.get(location).setOccupied(false);
+                return false;
+            }
         }
-        for (final Coordinates coordinates :
-                attacks) {
-            piecePositions.get(coordinates).getImageView().setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    if (piecePositions.get(coordinates).getColor() == turn){
-                        onPieceSelected(piecePositions.get(coordinates));
-                    }
-                }
-            });
+        piecePositions.get(location).setOccupied(false);
+        return true;
+    }
+
+    private void checkIfKingMoved(PieceTracker piece) {
+        if (piece.getType() == KING) {
+            if (piece.getColor() == BLACK) {
+                blackKingPosition = piece.getPosition();
+            } else whiteKingPosition = piece.getPosition();
         }
+    }
 
-        PieceTracker oldPiece = piecePositions.get(startingLocation);
-        oldPiece.getImageView().setOnClickListener(null);
-        oldPiece.setOccupied(false);
-        int image = getPieceImage(oldPiece);
-        piecePositions.get(startingLocation).getImageView().setImageResource(0);
-        resetSquareImage();
-
-        final PieceTracker newPiece = piecePositions.get(endLocation);
-
-
+    private void updatePiece(PieceTracker newPiece, PieceTracker oldPiece) {
         newPiece.setOccupied(true);
-        newPiece.setPosition(endLocation);
         newPiece.setType(oldPiece.getType());
         newPiece.setColour(oldPiece.getColour());
-        newPiece.getImageView().setImageResource(image);
+        newPiece.getImageView().setImageResource(getPieceImage(oldPiece));
         newPiece.setHasMoved(true);
+    }
 
-        changeTurn();
+    private void resetDepartureSquare(PieceTracker piece) {
+        piece.setOccupied(false);
+        piece.getImageView().setImageResource(0);
+    }
 
+    private ArrayList<Coordinates> getPossibleMoves(PieceTracker piece) {
+        MoveHelper moveHelper = new MoveHelper();
+        ArrayList<Coordinates> temp = new ArrayList<>();
+
+        switch (selectedPiece.getType()) {
+            case PAWN:
+                temp = moveHelper.getMovesAndAttacksForPawn(piece, piecePositions);
+                break;
+            case KNIGHT:
+                temp = moveHelper.getMovesAndAttacksForKnight(piece, piecePositions);
+                break;
+            case BISHOP:
+                temp = moveHelper.getMovesAndAttacksForBishop(piece, piecePositions);
+                break;
+            case ROOK:
+                temp = moveHelper.getMovesAndAttacksForRook(piece, piecePositions);
+                break;
+            case QUEEN:
+                temp = moveHelper.getMovesAndAttacksForQueen(piece, piecePositions);
+                break;
+            case KING:
+                temp = moveHelper.getMovesAndAttacksForKing(piece, piecePositions);
+                break;
+        }
+
+        return temp;
+    }
+
+    private boolean checkForCheck(PieceTracker piece) {
+
+        attackMarkers = new ArrayList<>();
+
+        getPossibleMoves(piece);
+
+        for (Coordinates attackPoint :
+                attackMarkers) {
+            if (piecePositions.get(attackPoint).isOccupied() && (piecePositions.get(attackPoint).getColor() != piece.getColor())) {
+                if (piecePositions.get(attackPoint).getType() == KING) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private void changeTurn() {
         if (turn == WHITE) {
             turn = BLACK;
-        } else turn = WHITE;
+            turnTracker.setText(R.string.black_to_move);
+        } else {
+            turn = WHITE;
+            turnTracker.setText(R.string.white_to_move);
+        }
     }
 
     private int getPieceImage(PieceTracker pieceTracker) {
@@ -608,7 +385,7 @@ public class ChessActivity extends AppCompatActivity {
     }
 
 
-    private void resetSquareImage() {
+    private void resetBackgroundColours() {
         if (editedSquares != null) {
             for (PieceTracker pieceTracker :
                     editedSquares) {

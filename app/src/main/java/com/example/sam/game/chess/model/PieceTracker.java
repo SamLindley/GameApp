@@ -1,11 +1,7 @@
 package com.example.sam.game.chess.model;
 
 import android.graphics.Color;
-import android.util.Log;
 import android.widget.ImageView;
-import com.example.sam.game.chess.model.Coordinates;
-
-import java.util.ArrayList;
 
 public class PieceTracker {
     private boolean hasMoved;
@@ -14,6 +10,7 @@ public class PieceTracker {
     private int color;
     private int type;
     private boolean isOccupied;
+    private boolean eligibleForMove;
     private int squareColor;
 
     public PieceTracker(Coordinates coordinates, ImageView imageView, int color, int type, boolean isOccupied, int squareColor) {
@@ -24,10 +21,19 @@ public class PieceTracker {
         this.type = type;
         this.isOccupied = isOccupied;
         this.squareColor = squareColor;
+        this.eligibleForMove = false;
 
         if (squareColor == 1) {
             this.imageView.setBackgroundColor(Color.LTGRAY);
         }else this.imageView.setBackgroundColor(Color.WHITE);
+    }
+
+    public boolean isEligibleForMove() {
+        return eligibleForMove;
+    }
+
+    public void setEligibleForMove(boolean eligibleForMove) {
+        this.eligibleForMove = eligibleForMove;
     }
 
     public int getSquareColor() {

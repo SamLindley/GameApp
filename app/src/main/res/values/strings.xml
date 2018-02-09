@@ -4,4 +4,6 @@
     <string name="tic_tac_toe">Tic Tac Toe</string>
     <string name="chess_button">Chess</string>
     <string name="tic_tac_toe_button">Tic Tac Toe</string>
+    <string name="white_to_move">White To Move</string>
+    <string name="black_to_move">Black To Move</string>
 </resources>
